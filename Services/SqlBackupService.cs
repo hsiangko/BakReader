@@ -130,7 +130,7 @@ WITH
   RECOVERY{moveClauses}";
 
             using var conn = new SqlConnection(_connectionString);
-            conn.FireInfoMessageEventOnUserErrors = true;
+            conn.FireInfoMessageEventOnUserErrors = false;
             bool upgradeNotified = false;
             conn.InfoMessage += (_, e) =>
             {

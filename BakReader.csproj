@@ -11,6 +11,7 @@
     <Platforms>AnyCPU</Platforms>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PackageReleaseNotes>初版 20260602</PackageReleaseNotes>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
     <AssemblyVersion></AssemblyVersion>
     <FileVersion></FileVersion>
   </PropertyGroup>
