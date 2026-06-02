@@ -10,6 +10,9 @@
     <RootNamespace>BakReader</RootNamespace>
     <Platforms>AnyCPU</Platforms>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PackageReleaseNotes>初版 20260602</PackageReleaseNotes>
+    <AssemblyVersion></AssemblyVersion>
+    <FileVersion></FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,8 +20,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="images\**">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
+    <EmbeddedResource Include="images\icon.png" />
   </ItemGroup>
 </Project>

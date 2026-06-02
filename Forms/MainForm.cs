@@ -57,11 +57,10 @@ namespace BakReader.Forms
         {
             InitializeComponent();
 
-            // 讀取並設定視窗 Icon
+            // 讀取並設定嵌入的視窗 Icon
             try
             {
-                string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "images", "icon.png");
-                var loadedIcon = CreateIconFromPng(iconPath);
+                var loadedIcon = CreateIconFromEmbeddedPng();
                 if (loadedIcon != null)
                 {
                     Icon = loadedIcon;
@@ -77,20 +76,29 @@ namespace BakReader.Forms
         }
 
         /// <summary>
-        /// 從 PNG 檔案建立一個支援 32-bit 完整透明度（Alpha Channel）的 Icon 物件。
-        /// 避開 GDI+ GetHicon() 會遺失 Alpha 通道導致透明邊緣出現黑邊或灰邊的 Bug。
+        /// 從嵌入的資源 (Embedded Resource) 中載入 PNG 並建立支援 32-bit 透明通道的 Icon 物件。
+        /// 這樣程式編譯後不需要任何外部 images 資料夾即可自帶圖示，支援完美單檔執行。
         /// </summary>
-        private static Icon? CreateIconFromPng(string filePath)
+        private static Icon? CreateIconFromEmbeddedPng()
         {
-            if (!System.IO.File.Exists(filePath)) return null;
-
             try
             {
-                byte[] pngBytes = System.IO.File.ReadAllBytes(filePath);
-                using var ms = new System.IO.MemoryStream();
-                using var bw = new System.IO.BinaryWriter(ms);
+                var assembly = typeof(MainForm).Assembly;
+                // 資源名稱規則：命名空間.資料夾.檔名
+                using var stream = assembly.GetManifestResourceStream("BakReader.images.icon.png");
+                if (stream == null) return null;
 
-                using var img = Image.FromFile(filePath);
+                byte[] pngBytes;
+                using (var ms = new System.IO.MemoryStream())
+                {
+                    stream.CopyTo(ms);
+                    pngBytes = ms.ToArray();
+                }
+
+                using var msIcon = new System.IO.MemoryStream();
+                using var bw = new System.IO.BinaryWriter(msIcon);
+
+                using var img = Image.FromStream(new System.IO.MemoryStream(pngBytes));
                 byte w = (byte)(img.Width >= 256 ? 0 : img.Width);
                 byte h = (byte)(img.Height >= 256 ? 0 : img.Height);
 
@@ -112,8 +120,8 @@ namespace BakReader.Forms
                 // PNG Image Data
                 bw.Write(pngBytes);
 
-                ms.Position = 0;
-                return new Icon(ms);
+                msIcon.Position = 0;
+                return new Icon(msIcon);
             }
             catch
             {
@@ -195,7 +203,7 @@ namespace BakReader.Forms
 
             var lblVer = new Label
             {
-                Text = "Free SQL Recover v1.0 20260602",
+                Text = "Free SQL Recover v1.0",
                 Font = DarkTheme.FontSmall,
                 ForeColor = DarkTheme.TextMuted,
                 BackColor = DarkTheme.Surface,
