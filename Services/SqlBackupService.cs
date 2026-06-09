@@ -12,6 +12,7 @@ namespace BakReader.Services
     {
         private readonly string _connectionString;
         private string? _tempDbName;
+        private readonly System.Collections.Generic.List<string> _tempFilePaths = new();
         private bool _disposed;
 
         public SqlBackupService(string connectionString)
@@ -117,6 +118,7 @@ namespace BakReader.Services
             {
                 var ext = f.Type == "L" ? "_log.ldf" : $"_data{(fileIndex > 0 ? fileIndex.ToString() : "")}.mdf";
                 var destPath = Path.Combine(actualDataPath, _tempDbName + ext);
+                _tempFilePaths.Add(destPath); // 追蹤暫存檔案路徑，以便後續清理
                 moveClauses.Append($",\n  MOVE N'{EscapeSqlString(f.LogicalName)}' TO N'{EscapeSqlString(destPath)}'");
                 if (f.Type != "L") fileIndex++;
             }
@@ -228,16 +230,16 @@ ORDER BY s.name, t.name";
         }
 
         /// <summary>
-        /// 刪除臨時資料庫並清除檔案
+        /// 刪除臨時資料庫並清除實體檔案
         /// </summary>
-        public async Task DropTempDatabaseAsync()
+        public void DropTempDatabase()
         {
             if (_tempDbName == null) return;
 
             try
             {
                 using var conn = new SqlConnection(_connectionString);
-                await conn.OpenAsync();
+                conn.Open();
 
                 // 先強制中斷所有連線，再刪除
                 var sql = $@"
@@ -247,12 +249,26 @@ BEGIN
     DROP DATABASE [{_tempDbName}];
 END";
                 using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 60 };
-                await cmd.ExecuteNonQueryAsync();
+                cmd.ExecuteNonQuery();
             }
             catch { /* 刪除失敗不影響主流程 */ }
             finally
             {
                 _tempDbName = null;
+
+                // 額外確保實體檔案被刪除（有時 SQL Server 可能因為離線或特定原因在 DROP 時殘留檔案）
+                foreach (var filePath in _tempFilePaths)
+                {
+                    try
+                    {
+                        if (File.Exists(filePath))
+                        {
+                            File.Delete(filePath);
+                        }
+                    }
+                    catch { /* 忽略個別檔案刪除失敗 */ }
+                }
+                _tempFilePaths.Clear();
             }
         }
 
@@ -273,8 +289,7 @@ END";
             if (!_disposed)
             {
                 _disposed = true;
-                // 非同步清理
-                Task.Run(async () => await DropTempDatabaseAsync());
+                DropTempDatabase();
             }
         }
     }
