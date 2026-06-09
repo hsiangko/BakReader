@@ -99,7 +99,7 @@ namespace BakReader.Services
         /// </summary>
         /// <param name="bakPath">備份檔案路徑</param>
         /// <param name="progress">進度回報</param>
-        public async Task RestoreToTempAsync(string bakPath, IProgress<string>? progress = null)
+        public async Task RestoreToTempAsync(string bakPath, string? dataPath = null, IProgress<string>? progress = null)
         {
             var guid = Guid.NewGuid().ToString("N")[..8];
             _tempDbName = $"BakReader_Temp_{guid}";
@@ -107,7 +107,7 @@ namespace BakReader.Services
             progress?.Report("讀取備份檔案清單...");
             var fileList = await ReadFileListAsync(bakPath);
 
-            var dataPath = LocalDbService.GetDefaultDataPath();
+            var actualDataPath = string.IsNullOrWhiteSpace(dataPath) ? LocalDbService.GetDefaultDataPath() : dataPath;
             progress?.Report($"準備還原到臨時資料庫：{_tempDbName}");
 
             // 建立 MOVE 子句，將所有檔案重新導向到 temp 路徑
@@ -116,7 +116,7 @@ namespace BakReader.Services
             foreach (var f in fileList)
             {
                 var ext = f.Type == "L" ? "_log.ldf" : $"_data{(fileIndex > 0 ? fileIndex.ToString() : "")}.mdf";
-                var destPath = Path.Combine(dataPath, _tempDbName + ext);
+                var destPath = Path.Combine(actualDataPath, _tempDbName + ext);
                 moveClauses.Append($",\n  MOVE N'{EscapeSqlString(f.LogicalName)}' TO N'{EscapeSqlString(destPath)}'");
                 if (f.Type != "L") fileIndex++;
             }
@@ -156,10 +156,10 @@ WITH
 
             await conn.OpenAsync();
 
-            // 設定較長的 timeout（大型備份可能需要幾分鐘）
+            // 設定為無限制 timeout（避免大型備份還原時發生逾時錯誤）
             using var cmd = new SqlCommand(restoreSql, conn)
             {
-                CommandTimeout = 600  // 10 分鐘
+                CommandTimeout = 0  // 0 表示無限制
             };
 
             progress?.Report("正在還原資料庫，請稍候...");

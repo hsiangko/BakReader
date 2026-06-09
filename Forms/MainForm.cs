@@ -23,6 +23,8 @@ namespace BakReader.Forms
 
         // Step 0
         private Label lblBakPath = null!;
+        private TextBox txtTempPath = null!;
+        private string _tempDataPath = "";
         private Panel pnlBackupInfo = null!;
         private Label lblDbName = null!, lblBackupDate = null!;
         private Label lblBackupSize = null!, lblBackupType = null!;
@@ -56,6 +58,7 @@ namespace BakReader.Forms
         public MainForm()
         {
             InitializeComponent();
+            _tempDataPath = LocalDbService.GetDefaultDataPath();
 
             // 讀取並設定嵌入的視窗 Icon
             try
@@ -482,6 +485,73 @@ namespace BakReader.Forms
             pnlFilePick.Controls.Add(lblBakPath);
             pnlFilePick.Controls.Add(btnBrowse);
 
+            // ── 暫存路徑設定區 ──
+            var pnlTempPick = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 74,
+                BackColor = DarkTheme.Card
+            };
+            pnlTempPick.Paint += (s, e) =>
+            {
+                using var pen = new Pen(DarkTheme.Border, 1f);
+                e.Graphics.DrawRectangle(pen, 0, 0, pnlTempPick.Width - 1, pnlTempPick.Height - 1);
+            };
+
+            var tblTemp = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 3,
+                RowCount = 1,
+                BackColor = DarkTheme.Card,
+                Padding = new Padding(16, 16, 16, 16)
+            };
+            tblTemp.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); // 暫存路徑設定 Label
+            tblTemp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // 輸入框 TextBox
+            tblTemp.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 116)); // 瀏覽按鈕
+            tblTemp.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+            var lblTempTitle = new Label
+            {
+                Text = "暫存路徑設定：",
+                ForeColor = DarkTheme.TextSecondary,
+                Font = DarkTheme.FontBody,
+                BackColor = DarkTheme.Card,
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, 0, 0, 0)
+            };
+
+            txtTempPath = new TextBox
+            {
+                Text = _tempDataPath,
+                Anchor = AnchorStyles.Left | AnchorStyles.Right,
+                Margin = new Padding(10, 0, 10, 0)
+            };
+            DarkTheme.Apply(txtTempPath);
+            txtTempPath.TextChanged += (s, e) =>
+            {
+                _tempDataPath = txtTempPath.Text;
+            };
+
+            var btnBrowseTemp = new Button
+            {
+                Text = "📂  瀏覽",
+                Width = 116,
+                Height = 40,
+                Anchor = AnchorStyles.Right,
+                Margin = new Padding(0, 0, 0, 0)
+            };
+            DarkTheme.ApplySecondary(btnBrowseTemp);
+            btnBrowseTemp.Click += BtnBrowseTemp_Click;
+
+            tblTemp.Controls.Add(lblTempTitle, 0, 0);
+            tblTemp.Controls.Add(txtTempPath, 1, 0);
+            tblTemp.Controls.Add(btnBrowseTemp, 2, 0);
+            pnlTempPick.Controls.Add(tblTemp);
+
+            var spTemp = MakeSpacer(12);
+
             var sp1 = MakeSpacer(12);
 
             // ── 副標 ──
@@ -515,6 +585,8 @@ namespace BakReader.Forms
             p.Controls.Add(sp3);
             p.Controls.Add(pnlBackupInfo);
             p.Controls.Add(sp2);
+            p.Controls.Add(pnlTempPick);    // 暫存路徑設定區
+            p.Controls.Add(spTemp);
             p.Controls.Add(pnlFilePick);
             p.Controls.Add(sp1);
             p.Controls.Add(lblSub);
@@ -654,7 +726,7 @@ namespace BakReader.Forms
                 {
                     BackColor = DarkTheme.Surface,
                     ForeColor = DarkTheme.TextPrimary,
-                    SelectionBackColor = Color.FromArgb(55, 99, 102, 241),
+                    SelectionBackColor = Color.FromArgb(43, 47, 91), // 使用不透明色彩，避免 WinForms 繪圖重疊鬼影
                     SelectionForeColor = DarkTheme.TextPrimary,
                     Font = DarkTheme.FontBody,
                     Padding = new Padding(6, 0, 6, 0)
@@ -670,7 +742,7 @@ namespace BakReader.Forms
                 },
                 AlternatingRowsDefaultCellStyle = new DataGridViewCellStyle
                 {
-                    BackColor = Color.FromArgb(210, 28, 32, 50)
+                    BackColor = DarkTheme.Card // 使用不透明的 Card 背景色，避免 WinForms 繪圖重疊鬼影
                 },
                 EnableHeadersVisualStyles = false
             };
@@ -1203,6 +1275,25 @@ namespace BakReader.Forms
             _ = TryLoadBackupInfoAsync(_bakFilePath);
         }
 
+        private void BtnBrowseTemp_Click(object? sender, EventArgs e)
+        {
+            using var fbd = new FolderBrowserDialog
+            {
+                Description = "選擇備份還原的本機暫存目錄（建議選擇空間充足的槽區，預設在 C 槽 AppData）",
+                UseDescriptionForTitle = true,
+                SelectedPath = _tempDataPath
+            };
+
+            if (fbd.ShowDialog() == DialogResult.OK)
+            {
+                _tempDataPath = fbd.SelectedPath;
+                if (txtTempPath != null)
+                {
+                    txtTempPath.Text = _tempDataPath;
+                }
+            }
+        }
+
         private async Task TryLoadBackupInfoAsync(string path)
         {
             try
@@ -1273,7 +1364,7 @@ namespace BakReader.Forms
                 _backupService = new SqlBackupService(LocalDbService.LocalDbConnectionString);
                 pbLoading.Value = 30;
 
-                await _backupService.RestoreToTempAsync(_bakFilePath, progress);
+                await _backupService.RestoreToTempAsync(_bakFilePath, _tempDataPath, progress);
                 pbLoading.Value = 76;
 
                 AppendColorLog(rtbLoadingLog, "讀取資料表清單...", DarkTheme.TextMuted);
